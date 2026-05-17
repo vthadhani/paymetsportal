@@ -1,49 +1,27 @@
 version: "3.8"
 
-services:
+# ── PayPortal BZ ─────────────────────────────────────────────────────────────
+# Single container: nginx (port 6680) + Node.js backend (internal port 3000)
+# Both managed by supervisord inside one image.
+# ─────────────────────────────────────────────────────────────────────────────
 
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: payportal-frontend
+services:
+  payportal:
+    build: .
+    container_name: payportal-bz
     restart: unless-stopped
     ports:
       - "6680:6680"
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - payportal-net
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:6680/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: payportal-backend
-    restart: unless-stopped
-    # Not exposed publicly — only reachable by frontend via internal network
-    networks:
-      - payportal-net
     environment:
       - PTP_LOGIN=${PTP_LOGIN}
       - PTP_SECRET=${PTP_SECRET}
       - PTP_ENDPOINT=${PTP_ENDPOINT}
       - PTP_RETURN_URL=${PTP_RETURN_URL}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
-      interval: 15s
+      test: ["CMD", "wget", "-qO-", "http://localhost:6680/health"]
+      interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
-
-networks:
-  payportal-net:
-    driver: bridge
+      start_period: 15s
