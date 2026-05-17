@@ -1,29 +1,26 @@
-# ── PayPortal BZ — Single container (nginx + Node.js) ──────────────────────
-# Runs both the frontend (nginx) and backend (Node.js) in one image.
-# supervisord manages both processes.
-# ────────────────────────────────────────────────────────────────────────────
-
 FROM node:18-alpine
 
 # Install nginx and supervisord
 RUN apk add --no-cache nginx supervisor
 
-# ── Backend ──────────────────────────────────────────────────────────────────
+# ── Backend: install deps ─────────────────────────────────────────────────────
 WORKDIR /app/backend
-COPY backend/package.json .
-RUN npm install --omit=dev
-COPY backend/server.js .
+COPY backend/package.json ./
+RUN npm install --omit=dev && echo "node_modules installed:" && ls node_modules | head -5
 
-# ── Frontend ─────────────────────────────────────────────────────────────────
+# ── Backend: copy source ──────────────────────────────────────────────────────
+COPY backend/server.js ./
+
+# ── Frontend: copy static files ───────────────────────────────────────────────
 RUN mkdir -p /usr/share/nginx/html
 COPY public/ /usr/share/nginx/html/
 
-# ── Nginx config ─────────────────────────────────────────────────────────────
+# ── nginx config ──────────────────────────────────────────────────────────────
 COPY nginx.conf /etc/nginx/http.d/payportal.conf
-# Remove default site if it exists
-RUN rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf 2>/dev/null || true
+RUN rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf 2>/dev/null; \
+    nginx -t && echo "nginx config OK"
 
-# ── Supervisord config ───────────────────────────────────────────────────────
+# ── supervisord config ────────────────────────────────────────────────────────
 COPY supervisord.conf /etc/supervisord.conf
 
 EXPOSE 6680
