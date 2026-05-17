@@ -215,6 +215,7 @@
   .empty-state i { font-size: 36px; display: block; margin-bottom: 10px; }
   .copy-toast { position: fixed; bottom: 24px; right: 24px; background: #2C2C2A; color: #F1EFE8; padding: 10px 18px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; display: none; align-items: center; gap: 8px; z-index: 999; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
   .copy-toast.show { display: flex; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 700px) {
     .sidebar { display: none; }
     .form-grid { grid-template-columns: 1fr; }
@@ -339,18 +340,10 @@
                 </div>
               </div>
               <div id="gw-note-stripe" class="info-box blue"><i class="ti ti-info-circle"></i><span>Stripe processes credit cards in USD and international currencies. Local Belize debit cards are not supported — use Atlantic Bank for those customers.</span></div>
-              <div id="gw-note-ptp" class="info-box green" style="display:none"><i class="ti ti-info-circle"></i><span>Atlantic Bank (PlaceToPay) accepts local Belize debit cards via <strong>abgateway.atlabank.com</strong>. Paste the <strong>processUrl</strong> from your WooCommerce order or backend below.</span></div>
+              <div id="gw-note-ptp" class="info-box green" style="display:none"><i class="ti ti-info-circle"></i><span>Atlantic Bank (PlaceToPay) accepts local Belize debit cards via <strong>abgateway.atlabank.com</strong>. Fill in the form and click Generate — the portal will call the Atlantic Bank API and create a real payment session automatically.</span></div>
             </div>
 
-            <!-- Atlantic Bank processUrl paste field -->
-            <div class="card" id="ptp-url-card" style="display:none">
-              <div class="card-header"><h3><i class="ti ti-link"></i> Atlantic Bank session URL</h3></div>
-              <div class="form-group">
-                <label>Paste your processUrl from Atlantic Bank *</label>
-                <input type="url" id="f-ptp-url" placeholder="https://abgateway.atlabank.com/spa/session/174018/9455cf...">
-              </div>
-              <div class="info-box amber" style="margin-top:.75rem"><i class="ti ti-alert-triangle"></i><span>Copy the processUrl from your WooCommerce PlaceToPay order or backend and paste it here — the portal will generate a scannable QR code and shareable link from it.</span></div>
-            </div>
+
 
             <div class="card">
               <div class="card-header"><h3><i class="ti ti-user"></i> Customer details</h3></div>
@@ -627,7 +620,7 @@ function selectGW(gw) {
   document.getElementById('opt-ptp').className = 'gw-option' + (gw === 'ptp' ? ' sel-ptp' : '');
   document.getElementById('gw-note-stripe').style.display = gw === 'stripe' ? 'flex' : 'none';
   document.getElementById('gw-note-ptp').style.display = gw === 'ptp' ? 'flex' : 'none';
-  document.getElementById('ptp-url-card').style.display = gw === 'ptp' ? 'block' : 'none';
+
   var btn = document.getElementById('gen-btn');
   btn.className = 'btn-primary' + (gw === 'ptp' ? ' ptp' : '');
   if (gw === 'ptp') { document.getElementById('f-currency').value = 'BZD'; document.getElementById('curr-sym').textContent = 'BZ$'; }
@@ -660,14 +653,58 @@ function generateLink() {
     var prefix = (document.getElementById('link-prefix').value || 'https://buy.stripe.com/').replace(/\/$/, '');
     url = prefix + '/pay_' + id + '_' + Date.now().toString(36);
   } else {
-    // Atlantic Bank: use the real processUrl pasted by the user
-    url = document.getElementById('f-ptp-url').value.trim();
-    if (!url || !url.startsWith('http')) {
-      showToast('Please paste your Atlantic Bank processUrl first.');
-      return;
-    }
+    /* ── Atlantic Bank: call backend → PlaceToPay API ── */
+    var btn = document.getElementById('gen-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Creating session...';
+
+    var expMap2 = {never:48,'24h':24,'7d':168,'30d':720};
+    var expiryHours = expMap2[document.getElementById('f-expiry').value] || 24;
+
+    fetch('/api/create-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reference:       id,
+        description:     document.getElementById('f-desc').value || ('Payment from ' + name),
+        amount:          parseFloat(amount),
+        currency:        currency,
+        customerName:    name,
+        customerEmail:   document.getElementById('f-email').value,
+        customerPhone:   document.getElementById('f-phone').value,
+        customerAddress: document.getElementById('f-address').value,
+        expiryHours:     expiryHours,
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      btn.className = 'btn-primary ptp';
+      btn.innerHTML = '<i class="ti ti-link"></i> Generate payment link';
+
+      if (!data.success) {
+        showToast('Atlantic Bank error: ' + (data.error || 'Unknown error'));
+        console.error('PTP error:', data);
+        return;
+      }
+      finishLink(id, data.processUrl, name, amount, currency);
+    })
+    .catch(function(err) {
+      btn.disabled = false;
+      btn.className = 'btn-primary ptp';
+      btn.innerHTML = '<i class="ti ti-link"></i> Generate payment link';
+      showToast('Could not reach backend. Is it running?');
+      console.error(err);
+    });
+    return; /* async — finishLink called in callback above */
   }
 
+  /* Stripe: synchronous path */
+  finishLink(id, url, name, amount, currency);
+}
+
+function finishLink(id, url, name, amount, currency) {
+  var isStripe = selectedGW === 'stripe';
   var link = {
     id: id, url: url, gateway: selectedGW,
     name: name,
@@ -684,8 +721,6 @@ function generateLink() {
   links.unshift(link);
   saveLinks();
 
-  /* Show result */
-  var isStripe = selectedGW === 'stripe';
   document.getElementById('gen-link-text').textContent = url;
   document.getElementById('gen-link-row').className = 'link-row' + (isStripe ? '' : ' ptp');
   document.getElementById('result-box-label').textContent = isStripe ? 'Stripe payment link' : 'Atlantic Bank (PlaceToPay) link';
@@ -743,8 +778,8 @@ function copyLink() {
 }
 
 function clearForm() {
-  ['f-name','f-phone','f-company','f-email','f-address','f-amount','f-desc','f-ptp-url'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.value = '';
+  ['f-name','f-phone','f-company','f-email','f-address','f-amount','f-desc'].forEach(function(id) {
+    document.getElementById(id).value = '';
   });
   document.getElementById('result-card').style.display = 'none';
   document.getElementById('placeholder-card').style.display = 'block';
