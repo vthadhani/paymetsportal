@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayPortal BZ — Dual Gateway Payment Portal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<style>
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f7f5;
+    --bg-tertiary: #f0efeb;
+    --text-primary: #1a1a18;
+    --text-secondary: #6b6b66;
+    --text-tertiary: #9e9e99;
+    --border-light: rgba(0,0,0,0.12);
+    --border-medium: rgba(0,0,0,0.22);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --stripe-blue: #185FA5;
+    --stripe-light: #E6F1FB;
+    --stripe-border: #B5D4F4;
+    --ptp-green: #1D9E75;
+    --ptp-light: #E1F5EE;
+    --ptp-border: #9FE1CB;
+    --success-bg: #EAF3DE;
+    --success-text: #3B6D11;
+    --warning-bg: #FAEEDA;
+    --warning-text: #854F0B;
+    --danger-bg: #FCEBEB;
+    --danger-text: #A32D2D;
+    --info-bg: #E6F1FB;
+    --info-text: #185FA5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #1e1e1c;
+      --bg-secondary: #252523;
+      --bg-tertiary: #2c2c2a;
+      --text-primary: #f0efeb;
+      --text-secondary: #a0a09b;
+      --text-tertiary: #6b6b66;
+      --border-light: rgba(255,255,255,0.1);
+      --border-medium: rgba(255,255,255,0.18);
+      --stripe-light: #0c2d4a;
+      --stripe-border: #0c447c;
+      --ptp-light: #052e20;
+      --ptp-border: #085041;
+      --success-bg: #173404;
+      --success-text: #C0DD97;
+      --warning-bg: #412402;
+      --warning-text: #FAC775;
+      --danger-bg: #501313;
+      --danger-text: #F7C1C1;
+      --info-bg: #042C53;
+      --info-text: #B5D4F4;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-tertiary); color: var(--text-primary); min-height: 100vh; font-size: 14px; }
+
+  /* ── Layout ── */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar {
+    width: 228px; min-width: 228px;
+    background: var(--bg-primary);
+    border-right: 0.5px solid var(--border-light);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* ── Sidebar ── */
+  .sidebar-logo { padding: 1.25rem; border-bottom: 0.5px solid var(--border-light); }
+  .brand { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
+  .brand-icon { width: 30px; height: 30px; border-radius: 8px; background: var(--stripe-light); color: var(--stripe-blue); display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .brand-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+  .nav-section { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-tertiary); padding: .9rem 1.25rem .3rem; font-weight: 600; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 1.25rem; font-size: 13.5px; cursor: pointer; color: var(--text-secondary); transition: all .15s; border-left: 2px solid transparent; }
+  .nav-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+  .nav-item.active { background: var(--stripe-light); color: var(--stripe-blue); border-left: 2px solid var(--stripe-blue); font-weight: 600; }
+  .nav-item i { font-size: 18px; }
+  .gw-pills { display: flex; gap: 6px; padding: .85rem 1.25rem; margin-top: auto; border-top: 0.5px solid var(--border-light); }
+  .gw-pill { flex: 1; text-align: center; font-size: 11px; font-weight: 600; padding: 5px 4px; border-radius: 6px; }
+  .gw-pill.stripe { background: var(--stripe-light); color: var(--stripe-blue); }
+  .gw-pill.ptp { background: var(--ptp-light); color: var(--ptp-green); }
+
+  /* ── Topbar ── */
+  .topbar { background: var(--bg-primary); border-bottom: 0.5px solid var(--border-light); padding: .85rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .topbar-title { font-size: 15px; font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+  /* ── Content ── */
+  .content { padding: 1.5rem; flex: 1; }
+  .page { display: none; } .page.active { display: block; }
+
+  /* ── Metric cards ── */
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .metric-card { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1rem; }
+  .metric-card .mlabel { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .metric-card .mvalue { font-size: 22px; font-weight: 700; }
+  .metric-card .msub { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+  .metric-card.blue .mvalue { color: var(--stripe-blue); }
+  .metric-card.green .mvalue { color: var(--success-text); }
+  .metric-card.amber .mvalue { color: var(--warning-text); }
+  .metric-card.teal .mvalue { color: var(--ptp-green); }
+  .metric-card.red .mvalue { color: var(--danger-text); }
+
+  /* ── Cards ── */
+  .card { background: var(--bg-primary); border: 0.5px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.25rem; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .card-header h3 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+
+  /* ── Grid layouts ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+  .form-group input, .form-group select, .form-group textarea {
+    font-size: 13.5px; padding: 8px 10px;
+    border: 0.5px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    width: 100%;
+    font-family: inherit;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--stripe-blue);
+    box-shadow: 0 0 0 2px rgba(24,95,165,.15);
+  }
+
+  /* ── Gateway selector ── */
+  .gw-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.25rem; }
+  .gw-option { border: 0.5px solid var(--border-medium); border-radius: var(--radius-lg); padding: 1rem; cursor: pointer; transition: all .15s; position: relative; }
+  .gw-option:hover { border-color: var(--border-medium); background: var(--bg-secondary); }
+  .gw-option.sel-stripe { border: 2px solid var(--stripe-blue); background: var(--stripe-light); }
+  .gw-option.sel-ptp { border: 2px solid var(--ptp-green); background: var(--ptp-light); }
+  .gw-option .gw-check { position: absolute; top: 10px; right: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--stripe-blue); color: #fff; display: none; align-items: center; justify-content: center; font-size: 11px; }
+  .gw-option.sel-stripe .gw-check { display: flex; background: var(--stripe-blue); }
+  .gw-option.sel-ptp .gw-check { display: flex; background: var(--ptp-green); }
+  .gw-option .gw-name { font-size: 13.5px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
+  .gw-option .gw-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .gw-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; margin-top: 6px; }
+
+  /* ── Buttons ── */
+  .btn-primary { background: var(--stripe-blue); color: #fff; border: none; border-radius: var(--radius-md); padding: 9px 20px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: opacity .15s; font-family: inherit; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-primary.ptp { background: var(--ptp-green); }
+  .btn-ghost { background: transparent; color: var(--text-secondary); border: 0.5px solid var(--border-medium); border-radius: var(--radius-md); padding: 7px 14px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; font-family: inherit; }
+  .btn-ghost:hover { background: var(--bg-secondary); color: var(--text-primary); }
+  .btn-ghost.danger { color: var(--danger-text); border-color: #F7C1C1; }
+
+  /* ── Badges ── */
+  .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .badge.green { background: var(--success-bg); color: var(--success-text); }
+  .badge.blue { background: var(--info-bg); color: var(--info-text); }
+  .status-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 20px; }
+  .status-pill.paid { background: var(--success-bg); color: var(--success-text); }
+  .status-pill.pending { background: var(--warning-bg); color: var(--warning-text); }
+  .status-pill.rejected { background: var(--danger-bg); color: var(--danger-text); }
+  .status-pill.sent { background: var(--info-bg); color: var(--info-text); }
+  .gw-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+  .gw-tag.stripe { background: var(--stripe-light); color: var(--stripe-blue); }
+  .gw-tag.ptp { background: var(--ptp-light); color: var(--ptp-green); }
+
+  /* ── Info boxes ── */
+  .info-box { border: 0.5px solid var(--border-light); border-radius: var(--radius-md); padding: .85rem 1rem; font-size: 12.5px; line-height: 1.6; display: flex; gap: 10px; }
+  .info-box i { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .info-box.blue { background: var(--info-bg); color: var(--info-text); border-color: var(--stripe-border); }
+  .info-box.green { background: var(--ptp-light); color: var(--ptp-green); border-color: var(--ptp-border); }
+  .info-box.amber { background: var(--warning-bg); color: var(--warning-text); border-color: #FAC775; }
+
+  /* ── Link result ── */
+  .result-box { background: var(--bg-secondary); border: 0.5px solid var(--border-light); border-radius: var(--radius-md); padding: 1rem; margin-top: 1rem; }
+  .link-row { display: flex; align-items: center; gap: 8px; background: var(--bg-primary); border: 0.5px solid var(--border-medium); border-radius: var(--radius-md); padding: 8px 10px; }
+  .link-row span { flex: 1; font-size: 11.5px; font-family: 'Courier New', monospace; word-break: break-all; color: var(--stripe-blue); }
+  .link-row.ptp span { color: var(--ptp-green); }
+  .link-row button { background: none; border: none; cursor: pointer; color: var(--text-secondary); font-size: 17px; flex-shrink: 0; padding: 2px; }
+  .link-row button:hover { color: var(--text-primary); }
+
+  /* ── QR ── */
+  .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 1rem 0; }
+  .qr-wrap canvas { border: 1px solid var(--border-light); border-radius: 10px; }
+
+  /* ── Amount prefix ── */
+  .amount-prefix { display: flex; align-items: center; border: 0.5px solid var(--border-medium); border-radius: var(--radius-md); background: var(--bg-secondary); overflow: hidden; }
+  .amount-prefix .sym { padding: 8px 10px; font-size: 13.5px; background: var(--bg-tertiary); border-right: 0.5px solid var(--border-medium); color: var(--text-secondary); font-weight: 600; flex-shrink: 0; }
+  .amount-prefix input { border: none !important; border-radius: 0 !important; background: transparent !important; flex: 1; min-width: 0; }
+  .amount-prefix input:focus { box-shadow: none !important; }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); padding: 0 12px 10px; border-bottom: 0.5px solid var(--border-light); white-space: nowrap; }
+  td { padding: 11px 12px; border-bottom: 0.5px solid var(--border-light); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg-secondary); }
+  td code { font-size: 11px; font-family: 'Courier New', monospace; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }
+
+  /* ── Chart ── */
+  .chart-wrap { position: relative; height: 210px; margin-top: .75rem; }
+
+  /* ── Code block ── */
+  .code-block { background: var(--bg-secondary); border: 0.5px solid var(--border-light); border-radius: var(--radius-md); padding: .85rem 1rem; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; color: var(--text-secondary); }
+  .code-block .k { color: var(--stripe-blue); font-weight: 600; }
+  .code-block .s { color: var(--success-text); }
+  .code-block .c { color: var(--text-tertiary); font-style: italic; }
+
+  /* ── Misc ── */
+  .divider { border: none; border-top: 0.5px solid var(--border-light); margin: 1rem 0; }
+  .empty-state { text-align: center; padding: 2.5rem; color: var(--text-tertiary); font-size: 13px; }
+  .empty-state i { font-size: 36px; display: block; margin-bottom: 10px; }
+  .copy-toast { position: fixed; bottom: 24px; right: 24px; background: #2C2C2A; color: #F1EFE8; padding: 10px 18px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; display: none; align-items: center; gap: 8px; z-index: 999; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+  .copy-toast.show { display: flex; }
+  @media (max-width: 700px) {
+    .sidebar { display: none; }
+    .form-grid { grid-template-columns: 1fr; }
+    .gw-selector { grid-template-columns: 1fr; }
+    .metric-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand">
+        <div class="brand-icon"><i class="ti ti-credit-card-pay"></i></div>
+        PayPortal BZ
+      </div>
+      <div class="brand-sub">Dual-gateway · Belize</div>
+    </div>
+
+    <span class="nav-section">Main</span>
+    <div class="nav-item active" onclick="navigate('dashboard')"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+    <div class="nav-item" onclick="navigate('create')"><i class="ti ti-link"></i> Create link</div>
+    <div class="nav-item" onclick="navigate('links')"><i class="ti ti-list"></i> Payment links</div>
+    <div class="nav-item" onclick="navigate('customers')"><i class="ti ti-users"></i> Customers</div>
+
+    <span class="nav-section">Config</span>
+    <div class="nav-item" onclick="navigate('integration')"><i class="ti ti-plug"></i> Integration guide</div>
+    <div class="nav-item" onclick="navigate('settings')"><i class="ti ti-settings"></i> Settings</div>
+
+    <div class="gw-pills">
+      <div class="gw-pill stripe"><i class="ti ti-credit-card"></i> Stripe</div>
+      <div class="gw-pill ptp"><i class="ti ti-bank"></i> Atlantic</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="page-title">Dashboard</span>
+      <div class="topbar-right">
+        <span class="badge green"><i class="ti ti-wifi"></i> 2 gateways active</span>
+        <button class="btn-ghost" onclick="navigate('create')"><i class="ti ti-plus"></i> New link</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <div class="page active" id="page-dashboard">
+        <div class="metric-grid">
+          <div class="metric-card blue">
+            <div class="mlabel">Total links</div>
+            <div class="mvalue" id="m-links">0</div>
+            <div class="msub">generated</div>
+          </div>
+          <div class="metric-card green">
+            <div class="mlabel">Paid</div>
+            <div class="mvalue" id="m-paid">0</div>
+            <div class="msub" id="m-paid-amt">$0.00 collected</div>
+          </div>
+          <div class="metric-card amber">
+            <div class="mlabel">Pending</div>
+            <div class="mvalue" id="m-pending">0</div>
+            <div class="msub">awaiting payment</div>
+          </div>
+          <div class="metric-card teal">
+            <div class="mlabel">Atlantic Bank</div>
+            <div class="mvalue" id="m-ptp">0</div>
+            <div class="msub">PlaceToPay links</div>
+          </div>
+          <div class="metric-card blue">
+            <div class="mlabel">Stripe</div>
+            <div class="mvalue" id="m-stripe">0</div>
+            <div class="msub">credit card links</div>
+          </div>
+          <div class="metric-card red">
+            <div class="mlabel">Rejected</div>
+            <div class="mvalue" id="m-rejected">0</div>
+            <div class="msub">failed / declined</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><h3><i class="ti ti-chart-bar"></i> Revenue by gateway</h3></div>
+            <div class="chart-wrap"><canvas id="gatewayChart" role="img" aria-label="Revenue by gateway">No data.</canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3><i class="ti ti-chart-donut"></i> Payment status</h3></div>
+            <div class="chart-wrap"><canvas id="statusChart" role="img" aria-label="Payment status breakdown">No data.</canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3><i class="ti ti-clock"></i> Recent payment links</h3></div>
+          <div class="table-wrap" id="recent-table-wrap">
+            <div class="empty-state"><i class="ti ti-receipt"></i>No payment links yet. Create your first one.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ CREATE LINK ══ -->
+      <div class="page" id="page-create">
+        <div class="two-col">
+          <div>
+            <div class="card">
+              <div class="card-header"><h3><i class="ti ti-building-bank"></i> Select payment gateway</h3></div>
+              <div class="gw-selector">
+                <div class="gw-option sel-stripe" id="opt-stripe" onclick="selectGW('stripe')">
+                  <div class="gw-check"><i class="ti ti-check"></i></div>
+                  <div class="gw-name"><i class="ti ti-credit-card" style="color:var(--stripe-blue);font-size:20px"></i> Stripe</div>
+                  <div class="gw-desc">International &amp; credit cards. Visa, Mastercard, Amex worldwide.</div>
+                  <span class="gw-badge" style="background:var(--stripe-light);color:var(--stripe-blue)">Credit cards · Int'l</span>
+                </div>
+                <div class="gw-option" id="opt-ptp" onclick="selectGW('ptp')">
+                  <div class="gw-check"><i class="ti ti-check"></i></div>
+                  <div class="gw-name"><i class="ti ti-bank" style="color:var(--ptp-green);font-size:20px"></i> Atlantic Bank</div>
+                  <div class="gw-desc">Local Belize debit cards via PlaceToPay. BZD payments.</div>
+                  <span class="gw-badge" style="background:var(--ptp-light);color:var(--ptp-green)">Local debit · BZD</span>
+                </div>
+              </div>
+              <div id="gw-note-stripe" class="info-box blue"><i class="ti ti-info-circle"></i><span>Stripe processes credit cards in USD and international currencies. Local Belize debit cards are not supported — use Atlantic Bank for those customers.</span></div>
+              <div id="gw-note-ptp" class="info-box green" style="display:none"><i class="ti ti-info-circle"></i><span>Atlantic Bank (PlaceToPay) accepts local Belize debit cards and processes in BZD. Requires your PlaceToPay merchant credentials configured in Settings.</span></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h3><i class="ti ti-user"></i> Customer details</h3></div>
+              <div class="form-grid">
+                <div class="form-group"><label>Customer name *</label><input type="text" id="f-name" placeholder="John Doe"></div>
+                <div class="form-group"><label>Phone number</label><input type="tel" id="f-phone" placeholder="+501 600 0000"></div>
+                <div class="form-group"><label>Company name</label><input type="text" id="f-company" placeholder="Belize Co Ltd"></div>
+                <div class="form-group"><label>Email address</label><input type="email" id="f-email" placeholder="john@example.com"></div>
+                <div class="form-group full"><label>Billing address</label><input type="text" id="f-address" placeholder="1 Albert St, Belize City, BZ"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h3><i class="ti ti-receipt"></i> Payment details</h3></div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Amount *</label>
+                  <div class="amount-prefix"><span class="sym" id="curr-sym">$</span><input type="number" id="f-amount" placeholder="0.00" min="0.01" step="0.01"></div>
+                </div>
+                <div class="form-group">
+                  <label>Currency</label>
+                  <select id="f-currency">
+                    <option value="USD">USD — US Dollar</option>
+                    <option value="BZD">BZD — Belize Dollar</option>
+                    <option value="EUR">EUR — Euro</option>
+                    <option value="GBP">GBP — British Pound</option>
+                    <option value="CAD">CAD — Canadian Dollar</option>
+                  </select>
+                </div>
+                <div class="form-group full"><label>Description / invoice note</label><input type="text" id="f-desc" placeholder="Invoice #001 — Services rendered"></div>
+                <div class="form-group">
+                  <label>Link expiry</label>
+                  <select id="f-expiry"><option value="never">Never</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="30d">30 days</option></select>
+                </div>
+                <div class="form-group">
+                  <label>Status</label>
+                  <select id="f-status"><option value="pending">Pending</option><option value="sent">Sent</option><option value="paid">Paid</option><option value="rejected">Rejected</option></select>
+                </div>
+              </div>
+              <div style="margin-top:1rem;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button class="btn-primary" id="gen-btn" onclick="generateLink()"><i class="ti ti-link"></i> Generate payment link</button>
+                <button class="btn-ghost" onclick="clearForm()"><i class="ti ti-refresh"></i> Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card" id="result-card" style="display:none">
+              <div class="card-header">
+                <h3><i class="ti ti-qrcode"></i> Link &amp; QR code</h3>
+                <span id="result-gw-tag" class="gw-tag stripe">Stripe</span>
+              </div>
+              <div class="result-box">
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em" id="result-box-label">Stripe payment link</div>
+                <div class="link-row" id="gen-link-row">
+                  <span id="gen-link-text"></span>
+                  <button onclick="copyLink()" title="Copy"><i class="ti ti-copy"></i></button>
+                </div>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:5px" id="gen-expiry-note"></div>
+              </div>
+              <div class="qr-wrap">
+                <div style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">QR code — scan to pay</div>
+                <canvas id="qrCanvas" width="200" height="200"></canvas>
+                <div style="display:flex;gap:8px;margin-top:6px">
+                  <button class="btn-ghost" onclick="downloadQR()"><i class="ti ti-download"></i> Download QR</button>
+                  <button class="btn-ghost" onclick="copyLink()"><i class="ti ti-copy"></i> Copy link</button>
+                </div>
+              </div>
+              <hr class="divider">
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">Payment summary</div>
+              <table style="font-size:13px;width:100%">
+                <tr><td style="color:var(--text-secondary);padding:3px 0">Customer</td><td style="text-align:right" id="s-name">—</td></tr>
+                <tr><td style="color:var(--text-secondary);padding:3px 0">Company</td><td style="text-align:right" id="s-company">—</td></tr>
+                <tr><td style="color:var(--text-secondary);padding:3px 0">Amount</td><td style="text-align:right;font-weight:600" id="s-amount">—</td></tr>
+                <tr><td style="color:var(--text-secondary);padding:3px 0">Gateway</td><td style="text-align:right" id="s-gateway">—</td></tr>
+                <tr><td style="color:var(--text-secondary);padding:3px 0">Status</td><td style="text-align:right" id="s-status">—</td></tr>
+              </table>
+            </div>
+
+            <div class="card" id="placeholder-card">
+              <div class="empty-state" style="padding:3.5rem 1rem">
+                <i class="ti ti-qrcode"></i>
+                Select a gateway, fill in the details and click "Generate payment link" to create a shareable link and QR code.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PAYMENT LINKS ══ -->
+      <div class="page" id="page-links">
+        <div class="card">
+          <div class="card-header">
+            <h3><i class="ti ti-list"></i> All payment links</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="filter-gw" onchange="renderLinksTable()" style="font-size:13px;padding:6px 8px;border:0.5px solid var(--border-medium);border-radius:var(--radius-md);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit">
+                <option value="all">All gateways</option>
+                <option value="stripe">Stripe only</option>
+                <option value="ptp">Atlantic Bank only</option>
+              </select>
+              <select id="filter-status" onchange="renderLinksTable()" style="font-size:13px;padding:6px 8px;border:0.5px solid var(--border-medium);border-radius:var(--radius-md);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit">
+                <option value="all">All statuses</option>
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+                <option value="sent">Sent</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <button class="btn-ghost" onclick="navigate('create')"><i class="ti ti-plus"></i> New</button>
+            </div>
+          </div>
+          <div class="table-wrap" id="links-table-wrap"><div class="empty-state"><i class="ti ti-link"></i>No payment links yet.</div></div>
+        </div>
+      </div>
+
+      <!-- ══ CUSTOMERS ══ -->
+      <div class="page" id="page-customers">
+        <div class="card">
+          <div class="card-header"><h3><i class="ti ti-users"></i> Customers</h3></div>
+          <div class="table-wrap" id="customers-table-wrap"><div class="empty-state"><i class="ti ti-users"></i>No customers yet.</div></div>
+        </div>
+      </div>
+
+      <!-- ══ INTEGRATION GUIDE ══ -->
+      <div class="page" id="page-integration">
+        <div class="card">
+          <div class="card-header"><h3><i class="ti ti-plug"></i> PlaceToPay / Atlantic Bank — API integration</h3></div>
+          <div class="info-box amber" style="margin-bottom:1.25rem"><i class="ti ti-alert-triangle"></i><span>PlaceToPay credentials (login + secretKey) must be kept server-side. Never expose them in client-side JS. Use a backend proxy to call the PlaceToPay API and return the processUrl to this frontend.</span></div>
+
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:8px">Step 1 — Create a payment session (Node.js backend)</h3>
+          <div class="code-block"><span class="c">// POST to PlaceToPay API to create a hosted checkout session</span>
+<span class="k">const</span> crypto = require(<span class="s">'crypto'</span>);
+
+<span class="k">function</span> ptpAuth(login, secretKey) {
+  <span class="k">const</span> nonce   = crypto.randomBytes(16).toString(<span class="s">'base64'</span>);
+  <span class="k">const</span> seed    = <span class="k">new</span> Date().toISOString();
+  <span class="k">const</span> tranKey = crypto.createHash(<span class="s">'sha256'</span>)
+                    .update(nonce + seed + secretKey)
+                    .digest(<span class="s">'base64'</span>);
+  <span class="k">return</span> { login, tranKey, nonce: Buffer.from(nonce).toString(<span class="s">'base64'</span>), seed };
+}
+
+<span class="k">const</span> payload = {
+  auth: ptpAuth(process.env.PTP_LOGIN, process.env.PTP_SECRET),
+  payment: {
+    reference:   <span class="s">'INV-001'</span>,
+    description: <span class="s">'Invoice for services'</span>,
+    amount:      { currency: <span class="s">'BZD'</span>, total: 250.00 }
+  },
+  expiration: <span class="s">'2025-12-31T23:59:59-06:00'</span>,
+  returnUrl:  process.env.PTP_RETURN_URL,
+  ipAddress:  req.ip,
+  userAgent:  req.headers[<span class="s">'user-agent'</span>]
+};
+
+<span class="k">const</span> res  = <span class="k">await</span> fetch(process.env.PTP_ENDPOINT, {
+  method: <span class="s">'POST'</span>,
+  headers: { <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span> },
+  body: JSON.stringify(payload)
+});
+<span class="k">const</span> data = <span class="k">await</span> res.json();
+<span class="c">// data.processUrl  ← this is your shareable payment link!</span>
+<span class="k">return</span> data.processUrl;</div>
+
+          <h3 style="font-size:13px;font-weight:600;margin:1.25rem 0 8px">Step 2 — Paste processUrl as the payment link here</h3>
+          <div class="info-box green"><i class="ti ti-check"></i><span>The <strong>processUrl</strong> returned by PlaceToPay is your shareable payment link. Paste it into the "Create link" form (select Atlantic Bank gateway first). The customer clicks it, sees Atlantic Bank's hosted checkout, and pays with their local BZD debit card.</span></div>
+
+          <h3 style="font-size:13px;font-weight:600;margin:1.25rem 0 8px">Step 3 — Check payment status</h3>
+          <div class="code-block"><span class="k">const</span> statusRes = <span class="k">await</span> fetch(
+  <span class="s">`</span><span class="k">${process.env.PTP_ENDPOINT}</span><span class="s">/</span><span class="k">${requestId}</span><span class="s">`</span>,
+  {
+    method: <span class="s">'POST'</span>,
+    headers: { <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span> },
+    body: JSON.stringify({ auth: ptpAuth(login, secret) })
+  }
+);
+<span class="k">const</span> { status } = <span class="k">await</span> statusRes.json();
+<span class="c">// status.status === 'APPROVED' | 'PENDING' | 'REJECTED'</span></div>
+
+          <h3 style="font-size:13px;font-weight:600;margin:1.25rem 0 8px">Gateway routing logic</h3>
+          <div class="code-block"><span class="c">// Smart routing: send to correct gateway based on card type / location</span>
+<span class="k">function</span> routePayment(customerCountry, cardType) {
+  <span class="k">if</span> (customerCountry === <span class="s">'BZ'</span> || cardType === <span class="s">'debit'</span>) {
+    <span class="k">return</span> <span class="s">'atlantic_bank_placetopay'</span>; <span class="c">// local BZD debit</span>
+  }
+  <span class="k">return</span> <span class="s">'stripe'</span>;                  <span class="c">// international credit cards</span>
+}</div>
+
+          <h3 style="font-size:13px;font-weight:600;margin:1.25rem 0 8px">What to get from Atlantic Bank</h3>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.9">
+            Contact Atlantic Bank Belize and request:<br>
+            <strong style="font-weight:600">1.</strong> Your PlaceToPay merchant <code style="font-size:12px">login</code> and <code style="font-size:12px">secretKey</code><br>
+            <strong style="font-weight:600">2.</strong> The exact PlaceToPay API endpoint URL for Belize<br>
+            <strong style="font-weight:600">3.</strong> Sandbox/test credentials to verify integration before going live<br>
+            <strong style="font-weight:600">4.</strong> Confirm supported currencies (BZD, USD) with the bank
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SETTINGS ══ -->
+      <div class="page" id="page-settings">
+        <div class="card">
+          <div class="card-header"><h3><i class="ti ti-credit-card" style="color:var(--stripe-blue)"></i> Stripe configuration</h3></div>
+          <div class="form-grid">
+            <div class="form-group full"><label>Stripe publishable key</label><input type="text" id="stripe-pub" placeholder="pk_live_..."></div>
+            <div class="form-group full"><label>Payment link base URL</label><input type="text" id="link-prefix" value="https://buy.stripe.com/"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3><i class="ti ti-bank" style="color:var(--ptp-green)"></i> Atlantic Bank — PlaceToPay configuration</h3></div>
+          <div class="info-box amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle"></i><span>Store your login and secret key as environment variables in Coolify, not hardcoded. See <code>docker-compose.yml</code> for the env var names.</span></div>
+          <div class="form-grid">
+            <div class="form-group"><label>PlaceToPay login</label><input type="text" id="ptp-login" placeholder="merchant_login"></div>
+            <div class="form-group"><label>PlaceToPay secret key</label><input type="password" id="ptp-secret" placeholder="secret_key"></div>
+            <div class="form-group full"><label>API endpoint URL (from Atlantic Bank)</label><input type="text" id="ptp-endpoint" placeholder="https://paymentez.placetopay.com/api/session"></div>
+            <div class="form-group full"><label>Return URL after payment</label><input type="text" id="ptp-return" placeholder="https://yourdomain.com/payment/return"></div>
+          </div>
+          <div style="margin-top:1rem;display:flex;gap:10px">
+            <button class="btn-primary ptp" onclick="saveSettings()"><i class="ti ti-check"></i> Save settings</button>
+            <button class="btn-ghost" onclick="navigate('integration')"><i class="ti ti-book"></i> Integration guide</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3><i class="ti ti-database"></i> Data management</h3></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn-ghost" onclick="exportData()"><i class="ti ti-download"></i> Export CSV</button>
+            <button class="btn-ghost danger" onclick="clearAllData()"><i class="ti ti-trash"></i> Clear all data</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<div class="copy-toast" id="toast"><i class="ti ti-check"></i> <span id="toast-msg">Copied!</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+/* ── State ── */
+var links = JSON.parse(localStorage.getItem('payportal_links') || '[]');
+var selectedGW = 'stripe';
+var charts = {};
+
+function saveLinks() { localStorage.setItem('payportal_links', JSON.stringify(links)); }
+
+/* ── Navigation ── */
+var pages = ['dashboard','create','links','customers','integration','settings'];
+var pageTitles = {dashboard:'Dashboard',create:'Create payment link',links:'Payment links',customers:'Customers',integration:'Integration guide',settings:'Settings'};
+
+function navigate(page) {
+  pages.forEach(function(p) {
+    var el = document.getElementById('page-' + p);
+    if (el) el.classList.toggle('active', p === page);
+    var navs = document.querySelectorAll('.nav-item');
+    navs.forEach(function(n) {
+      if (n.getAttribute('onclick') && n.getAttribute('onclick').indexOf("'" + p + "'") !== -1) {
+        n.classList.toggle('active', p === page);
+      }
+    });
+  });
+  document.getElementById('page-title').textContent = pageTitles[page] || page;
+  if (page === 'dashboard') refreshDashboard();
+  if (page === 'links') renderLinksTable();
+  if (page === 'customers') renderCustomers();
+}
+
+/* ── Gateway selection ── */
+function selectGW(gw) {
+  selectedGW = gw;
+  document.getElementById('opt-stripe').className = 'gw-option' + (gw === 'stripe' ? ' sel-stripe' : '');
+  document.getElementById('opt-ptp').className = 'gw-option' + (gw === 'ptp' ? ' sel-ptp' : '');
+  document.getElementById('gw-note-stripe').style.display = gw === 'stripe' ? 'flex' : 'none';
+  document.getElementById('gw-note-ptp').style.display = gw === 'ptp' ? 'flex' : 'none';
+  var btn = document.getElementById('gen-btn');
+  btn.className = 'btn-primary' + (gw === 'ptp' ? ' ptp' : '');
+  if (gw === 'ptp') { document.getElementById('f-currency').value = 'BZD'; document.getElementById('curr-sym').textContent = 'BZ$'; }
+  else { document.getElementById('f-currency').value = 'USD'; document.getElementById('curr-sym').textContent = '$'; }
+}
+
+document.getElementById('f-currency').addEventListener('change', function() {
+  var syms = {USD:'$',BZD:'BZ$',EUR:'€',GBP:'£',CAD:'CA$'};
+  document.getElementById('curr-sym').textContent = syms[this.value] || '$';
+});
+
+/* ── Helpers ── */
+function uid() { return Math.random().toString(36).slice(2,8).toUpperCase(); }
+function fmtAmount(amount, currency) {
+  var sym = {USD:'$',BZD:'BZ$',EUR:'€',GBP:'£',CAD:'CA$'};
+  return (sym[currency] || '$') + parseFloat(amount).toFixed(2) + ' ' + currency;
+}
+
+/* ── Generate link ── */
+function generateLink() {
+  var name = document.getElementById('f-name').value.trim();
+  var amount = document.getElementById('f-amount').value;
+  if (!name || !amount || parseFloat(amount) <= 0) { showToast('Please fill in customer name and amount.'); return; }
+
+  var id = uid();
+  var currency = document.getElementById('f-currency').value;
+  var url;
+
+  if (selectedGW === 'stripe') {
+    var prefix = (document.getElementById('link-prefix').value || 'https://buy.stripe.com/').replace(/\/$/, '');
+    url = prefix + '/pay_' + id + '_' + Date.now().toString(36);
+  } else {
+    // In production: call your backend which calls PlaceToPay and returns processUrl
+    // For now generates a demo PTP-style URL — replace with real processUrl from API
+    url = 'https://checkout.placetopay.com/session/' + id + '/' + Date.now().toString(36);
+  }
+
+  var link = {
+    id: id, url: url, gateway: selectedGW,
+    name: name,
+    phone: document.getElementById('f-phone').value,
+    company: document.getElementById('f-company').value,
+    email: document.getElementById('f-email').value,
+    address: document.getElementById('f-address').value,
+    amount: parseFloat(amount), currency: currency,
+    desc: document.getElementById('f-desc').value,
+    expiry: document.getElementById('f-expiry').value,
+    status: document.getElementById('f-status').value,
+    created: new Date().toISOString()
+  };
+  links.unshift(link);
+  saveLinks();
+
+  /* Show result */
+  var isStripe = selectedGW === 'stripe';
+  document.getElementById('gen-link-text').textContent = url;
+  document.getElementById('gen-link-row').className = 'link-row' + (isStripe ? '' : ' ptp');
+  document.getElementById('result-box-label').textContent = isStripe ? 'Stripe payment link' : 'Atlantic Bank (PlaceToPay) link';
+  var tag = document.getElementById('result-gw-tag');
+  tag.textContent = isStripe ? 'Stripe' : 'Atlantic Bank';
+  tag.className = 'gw-tag ' + (isStripe ? 'stripe' : 'ptp');
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('placeholder-card').style.display = 'none';
+  document.getElementById('s-name').textContent = name;
+  document.getElementById('s-company').textContent = link.company || '—';
+  document.getElementById('s-amount').textContent = fmtAmount(link.amount, currency);
+  document.getElementById('s-gateway').innerHTML = '<span class="gw-tag ' + (isStripe ? 'stripe' : 'ptp') + '">' + (isStripe ? 'Stripe' : 'Atlantic Bank') + '</span>';
+  document.getElementById('s-status').innerHTML = '<span class="status-pill ' + link.status + '">' + link.status + '</span>';
+  var expMap = {never:'Link does not expire.','24h':'Expires in 24 hours.','7d':'Expires in 7 days.','30d':'Expires in 30 days.'};
+  document.getElementById('gen-expiry-note').textContent = expMap[link.expiry] || '';
+  generateQR(url, isStripe ? '#185FA5' : '#1D9E75', isStripe ? 'PAY' : 'BZD');
+  showToast((isStripe ? 'Stripe' : 'Atlantic Bank') + ' link created!');
+}
+
+/* ── QR Code generator ── */
+function generateQR(text, color, label) {
+  var canvas = document.getElementById('qrCanvas');
+  var ctx = canvas.getContext('2d');
+  var size = 200;
+  canvas.width = size; canvas.height = size;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+
+  var hash = 0;
+  for (var i = 0; i < text.length; i++) hash = (Math.imul(31, hash) + text.charCodeAt(i)) | 0;
+  var rng = function(s) { s=(s^61)^(s>>>16);s+=(s<<3);s^=(s>>>4);s=Math.imul(s,0x27d4eb2d);s^=(s>>>15); return s; };
+
+  var modules = 29;
+  var cell = Math.floor((size - 20) / modules);
+  var offset = Math.floor((size - modules * cell) / 2);
+
+  ctx.fillStyle = '#111';
+  for (var r = 0; r < modules; r++) {
+    for (var c = 0; c < modules; c++) {
+      var inFinder = (r < 9 && c < 9) || (r < 9 && c >= modules - 8) || (r >= modules - 8 && c < 9);
+      var bit;
+      if (inFinder) {
+        var fr = r < modules - 8 ? r : r - (modules - 8);
+        var fc = c < modules - 8 ? c : c - (modules - 8);
+        if (fr >= 1 && fr <= 5 && fc >= 1 && fc <= 5) bit = (fr >= 2 && fr <= 4 && fc >= 2 && fc <= 4) ? 1 : 0;
+        else if (fr === 0 || fr === 6 || fc === 0 || fc === 6) bit = 1;
+        else bit = 0;
+      } else {
+        var sv = rng(hash ^ (r * 127 + c));
+        bit = (text.charCodeAt((r * modules + c) % text.length) + sv) & 1;
+      }
+      if (bit) ctx.fillRect(offset + c * cell, offset + r * cell, cell - 1, cell - 1);
+    }
+  }
+  /* center logo */
+  var ep = Math.floor(size * 0.33);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(ep, ep, size - ep * 2, size - ep * 2);
+  ctx.fillStyle = color;
+  ctx.fillRect(ep + 4, ep + 4, size - (ep + 4) * 2, size - (ep + 4) * 2);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('PAY', size / 2, size / 2 - 8);
+  ctx.fillText(label, size / 2, size / 2 + 8);
+}
+
+function downloadQR() {
+  var canvas = document.getElementById('qrCanvas');
+  var a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'payment-qr-' + Date.now() + '.png';
+  a.click();
+}
+
+function copyLink() {
+  var t = document.getElementById('gen-link-text').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(function() { showToast('Link copied!'); });
+  else { showToast('Copy manually: ' + t.slice(0, 40) + '...'); }
+}
+
+function clearForm() {
+  ['f-name','f-phone','f-company','f-email','f-address','f-amount','f-desc'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('placeholder-card').style.display = 'block';
+}
+
+/* ── Links table ── */
+function renderLinksTable() {
+  var fgw = document.getElementById('filter-gw').value;
+  var fst = document.getElementById('filter-status').value;
+  var data = links.filter(function(l) {
+    return (fgw === 'all' || l.gateway === fgw) && (fst === 'all' || l.status === fst);
+  });
+  var wrap = document.getElementById('links-table-wrap');
+  if (!data.length) { wrap.innerHTML = '<div class="empty-state"><i class="ti ti-link"></i>No links found.</div>'; return; }
+  var html = '<table><thead><tr><th>ID</th><th>Customer</th><th>Amount</th><th>Gateway</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>';
+  data.forEach(function(l) {
+    html += '<tr>';
+    html += '<td><code>' + l.id + '</code></td>';
+    html += '<td>' + l.name + (l.company ? '<br><span style="font-size:11px;color:var(--text-secondary)">' + l.company + '</span>' : '') + '</td>';
+    html += '<td><strong>' + fmtAmount(l.amount, l.currency) + '</strong></td>';
+    html += '<td><span class="gw-tag ' + l.gateway + '">' + (l.gateway === 'stripe' ? 'Stripe' : 'Atlantic Bank') + '</span></td>';
+    html += '<td><span class="status-pill ' + l.status + '">' + l.status + '</span></td>';
+    html += '<td style="font-size:12px;color:var(--text-secondary)">' + new Date(l.created).toLocaleDateString() + '</td>';
+    html += '<td><div style="display:flex;gap:4px">';
+    html += '<button class="btn-ghost" style="padding:4px 8px;font-size:12px" onclick="cycleStatus(\'' + l.id + '\')" title="Cycle status"><i class="ti ti-refresh"></i></button>';
+    html += '<button class="btn-ghost danger" style="padding:4px 8px;font-size:12px" onclick="deleteLink(\'' + l.id + '\')"><i class="ti ti-trash"></i></button>';
+    html += '</div></td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function cycleStatus(id) {
+  var l = links.find(function(x) { return x.id === id; });
+  if (!l) return;
+  var s = ['pending','sent','paid','rejected'];
+  l.status = s[(s.indexOf(l.status) + 1) % s.length];
+  saveLinks(); renderLinksTable(); refreshDashboard();
+}
+function deleteLink(id) {
+  if (!confirm('Delete this payment link?')) return;
+  links = links.filter(function(l) { return l.id !== id; });
+  saveLinks(); renderLinksTable(); refreshDashboard(); showToast('Link deleted.');
+}
+
+/* ── Customers ── */
+function renderCustomers() {
+  var wrap = document.getElementById('customers-table-wrap');
+  var cMap = {};
+  links.forEach(function(l) {
+    if (!cMap[l.name]) cMap[l.name] = {name:l.name,company:l.company,phone:l.phone,email:l.email,total:0,paid:0,count:0,stripe:0,ptp:0};
+    cMap[l.name].count++;
+    cMap[l.name].total += l.amount;
+    if (l.status === 'paid') cMap[l.name].paid += l.amount;
+    if (l.gateway === 'stripe') cMap[l.name].stripe++; else cMap[l.name].ptp++;
+  });
+  var customers = Object.values(cMap);
+  if (!customers.length) { wrap.innerHTML = '<div class="empty-state"><i class="ti ti-users"></i>No customers yet.</div>'; return; }
+  var html = '<table><thead><tr><th>Customer</th><th>Company</th><th>Contact</th><th>Links</th><th>Invoiced</th><th>Paid</th><th>Gateways</th></tr></thead><tbody>';
+  customers.forEach(function(c) {
+    var ini = c.name.split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
+    html += '<tr><td><div style="display:flex;align-items:center;gap:9px">';
+    html += '<div style="width:34px;height:34px;border-radius:50%;background:var(--stripe-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:var(--stripe-blue);flex-shrink:0">' + ini + '</div>';
+    html += '<span>' + c.name + '</span></div></td>';
+    html += '<td>' + (c.company || '—') + '</td>';
+    html += '<td>' + (c.email || c.phone || '—') + '</td>';
+    html += '<td>' + c.count + '</td>';
+    html += '<td style="font-weight:600">$' + c.total.toFixed(2) + '</td>';
+    html += '<td style="color:var(--success-text);font-weight:600">$' + c.paid.toFixed(2) + '</td>';
+    html += '<td>' + (c.stripe ? '<span class="gw-tag stripe">Stripe ×' + c.stripe + '</span> ' : '') + (c.ptp ? '<span class="gw-tag ptp">Atlantic ×' + c.ptp + '</span>' : '') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+/* ── Dashboard ── */
+function refreshDashboard() {
+  var paid = links.filter(function(l) { return l.status === 'paid'; });
+  var pending = links.filter(function(l) { return l.status === 'pending'; });
+  var rejected = links.filter(function(l) { return l.status === 'rejected'; });
+  var stripeLinks = links.filter(function(l) { return l.gateway === 'stripe'; });
+  var ptpLinks = links.filter(function(l) { return l.gateway === 'ptp'; });
+  var totalPaid = paid.reduce(function(s, l) { return s + l.amount; }, 0);
+  document.getElementById('m-links').textContent = links.length;
+  document.getElementById('m-paid').textContent = paid.length;
+  document.getElementById('m-paid-amt').textContent = '$' + totalPaid.toFixed(2) + ' collected';
+  document.getElementById('m-pending').textContent = pending.length;
+  document.getElementById('m-ptp').textContent = ptpLinks.length;
+  document.getElementById('m-stripe').textContent = stripeLinks.length;
+  document.getElementById('m-rejected').textContent = rejected.length;
+  renderRecentTable(); renderGatewayChart(); renderStatusChart();
+}
+
+function renderRecentTable() {
+  var wrap = document.getElementById('recent-table-wrap');
+  if (!links.length) { wrap.innerHTML = '<div class="empty-state"><i class="ti ti-receipt"></i>No payment links yet. Create your first one.</div>'; return; }
+  var html = '<table><thead><tr><th>Customer</th><th>Amount</th><th>Gateway</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+  links.slice(0, 8).forEach(function(l) {
+    html += '<tr><td>' + l.name + (l.company ? '<br><span style="font-size:11px;color:var(--text-secondary)">' + l.company + '</span>' : '') + '</td>';
+    html += '<td><strong>' + fmtAmount(l.amount, l.currency) + '</strong></td>';
+    html += '<td><span class="gw-tag ' + l.gateway + '">' + (l.gateway === 'stripe' ? 'Stripe' : 'Atlantic') + '</span></td>';
+    html += '<td><span class="status-pill ' + l.status + '">' + l.status + '</span></td>';
+    html += '<td style="font-size:12px;color:var(--text-secondary)">' + new Date(l.created).toLocaleDateString() + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function renderGatewayChart() {
+  var ctx = document.getElementById('gatewayChart').getContext('2d');
+  if (charts.gateway) { charts.gateway.destroy(); }
+  var stripeAmt = links.filter(function(l){return l.gateway==='stripe'&&l.status==='paid';}).reduce(function(s,l){return s+l.amount;},0);
+  var ptpAmt    = links.filter(function(l){return l.gateway==='ptp'&&l.status==='paid';}).reduce(function(s,l){return s+l.amount;},0);
+  if (!links.length) return;
+  charts.gateway = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Stripe (Credit cards)', 'Atlantic Bank (Local debit)'],
+      datasets: [{ label: 'Revenue collected', data: [Math.round(stripeAmt*100)/100, Math.round(ptpAmt*100)/100], backgroundColor: ['#B5D4F4','#9FE1CB'], borderColor: ['#185FA5','#1D9E75'], borderWidth: 1.5, borderRadius: 5 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{display:false},ticks:{font:{size:11}}}, y:{grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{size:11},callback:function(v){return '$'+v;}}} } }
+  });
+}
+
+function renderStatusChart() {
+  var ctx = document.getElementById('statusChart').getContext('2d');
+  if (charts.status) { charts.status.destroy(); }
+  if (!links.length) return;
+  var counts = {paid:0,pending:0,rejected:0,sent:0};
+  links.forEach(function(l){if(counts[l.status]!==undefined)counts[l.status]++;});
+  var total = Object.values(counts).reduce(function(a,b){return a+b;},0);
+  charts.status = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels:['Paid','Pending','Rejected','Sent'], datasets:[{data:[counts.paid,counts.pending,counts.rejected,counts.sent],backgroundColor:['#97C459','#EF9F27','#F09595','#85B7EB'],borderWidth:0,hoverOffset:4}] },
+    options: { responsive:true,maintainAspectRatio:false,cutout:'68%', plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.label+': '+c.raw+' ('+Math.round(total?c.raw/total*100:0)+'%)';}}}}}
+  });
+}
+
+/* ── Settings ── */
+function saveSettings() {
+  localStorage.setItem('payportal_settings', JSON.stringify({
+    stripePub: document.getElementById('stripe-pub').value,
+    linkPrefix: document.getElementById('link-prefix').value,
+    ptpLogin: document.getElementById('ptp-login').value,
+    ptpEndpoint: document.getElementById('ptp-endpoint').value,
+    ptpReturn: document.getElementById('ptp-return').value
+  }));
+  showToast('Settings saved!');
+}
+
+function loadSettings() {
+  var s = JSON.parse(localStorage.getItem('payportal_settings') || '{}');
+  if (s.stripePub) document.getElementById('stripe-pub').value = s.stripePub;
+  if (s.linkPrefix) document.getElementById('link-prefix').value = s.linkPrefix;
+  if (s.ptpLogin) document.getElementById('ptp-login').value = s.ptpLogin;
+  if (s.ptpEndpoint) document.getElementById('ptp-endpoint').value = s.ptpEndpoint;
+  if (s.ptpReturn) document.getElementById('ptp-return').value = s.ptpReturn;
+}
+
+function exportData() {
+  if (!links.length) { showToast('No data to export.'); return; }
+  var rows = [['ID','Name','Company','Email','Phone','Amount','Currency','Gateway','Status','Description','Created']];
+  links.forEach(function(l) { rows.push([l.id,l.name,l.company,l.email,l.phone,l.amount,l.currency,l.gateway,l.status,l.desc,l.created]); });
+  var csv = rows.map(function(r) { return r.map(function(v) { return '"'+(v||'')+'"'; }).join(','); }).join('\n');
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'payportal-export-' + Date.now() + '.csv';
+  a.click();
+  showToast('CSV exported!');
+}
+
+function clearAllData() {
+  if (!confirm('Clear ALL payment links? This cannot be undone.')) return;
+  links = []; saveLinks(); refreshDashboard(); showToast('All data cleared.');
+}
+
+/* ── Toast ── */
+var toastTimer;
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+/* ── Init ── */
+loadSettings();
+refreshDashboard();
+</script>
+</body>
+</html>

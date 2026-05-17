@@ -1,0 +1,36 @@
+version: "3.8"
+
+# ── PayPortal BZ — docker-compose.yml ────────────────────────────────────────
+# For LOCAL testing:  docker compose up --build
+# For COOLIFY:        Point Coolify at this repo; it will use the Dockerfile.
+#                     Set environment variables in Coolify's UI — never here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  payportal:
+    build: .
+    container_name: payportal-bz
+    restart: unless-stopped
+    ports:
+      - "6680:6680"
+
+    # ── Environment variables ─────────────────────────────────────────────────
+    # Do NOT put real keys here. Set them in Coolify's Environment Variables UI
+    # or in a .env file locally (never committed to git).
+    environment:
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - PTP_LOGIN=${PTP_LOGIN}
+      - PTP_SECRET=${PTP_SECRET}
+      - PTP_ENDPOINT=${PTP_ENDPOINT}
+      - PTP_RETURN_URL=${PTP_RETURN_URL}
+
+    labels:
+      - "coolify.managed=true"
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6680/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
