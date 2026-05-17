@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Result — PayPortal BZ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0efeb; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  }
+  .card {
+    background: #fff; border-radius: 16px; padding: 2.5rem 2rem;
+    max-width: 480px; width: 100%; text-align: center;
+    box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  }
+  .icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1.5rem; font-size: 36px;
+  }
+  .icon.approved { background: #EAF3DE; }
+  .icon.pending  { background: #FAEEDA; }
+  .icon.rejected { background: #FCEBEB; }
+  .icon.checking { background: #E6F1FB; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: .5rem; }
+  h1.approved { color: #3B6D11; }
+  h1.pending  { color: #854F0B; }
+  h1.rejected { color: #A32D2D; }
+  h1.checking { color: #185FA5; }
+  .sub { font-size: 14px; color: #6b6b66; line-height: 1.6; margin-bottom: 1.5rem; }
+  .detail-box { background: #f7f7f5; border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; text-align: left; }
+  .detail-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .detail-row .lbl { color: #6b6b66; }
+  .detail-row .val { font-weight: 600; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn.primary { background: #185FA5; color: #fff; }
+  .btn.ghost { background: transparent; color: #6b6b66; border: 1px solid #ccc; margin-left: 8px; }
+  .brand { font-size: 12px; color: #9e9e99; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon checking" id="icon">⏳</div>
+  <h1 class="checking" id="title">Checking payment…</h1>
+  <p class="sub" id="sub">Please wait while we confirm your payment with Atlantic Bank.</p>
+  <div class="detail-box" id="detail-box" style="display:none">
+    <div class="detail-row"><span class="lbl">Reference</span><span class="val" id="d-ref">—</span></div>
+    <div class="detail-row"><span class="lbl">Gateway</span><span class="val">Atlantic Bank · PlaceToPay</span></div>
+    <div class="detail-row"><span class="lbl">Status</span><span class="val" id="d-status">—</span></div>
+  </div>
+  <div id="actions"></div>
+  <p class="brand">PayPortal BZ · Powered by Atlantic Bank &amp; PlaceToPay</p>
+</div>
+<script>
+  var params    = new URLSearchParams(window.location.search);
+  var requestId = params.get('requestId');
+  var reference = params.get('reference') || params.get('ref') || '—';
+  var rawStatus = (params.get('status') || '').toUpperCase();
+
+  var backBtn  = '<a href="/" class="btn primary">&#8592; Back to portal</a>';
+  var retryBtn = '<a href="/" class="btn ghost">Try again</a>';
+
+  function setUI(state, title, sub, actions) {
+    var icons = {approved:'✅', pending:'⏳', rejected:'❌', checking:'🔄'};
+    document.getElementById('icon').className   = 'icon ' + state;
+    document.getElementById('icon').textContent = icons[state] || '⏳';
+    document.getElementById('title').className  = state;
+    document.getElementById('title').textContent = title;
+    document.getElementById('sub').textContent   = sub;
+    document.getElementById('actions').innerHTML = actions;
+  }
+  function showDetails(ref, status) {
+    document.getElementById('detail-box').style.display = 'block';
+    document.getElementById('d-ref').textContent    = ref;
+    document.getElementById('d-status').textContent = status;
+  }
+
+  if (rawStatus === 'APPROVED') {
+    setUI('approved','Payment approved ✓','Your payment was successfully processed by Atlantic Bank. You will receive a confirmation shortly.', backBtn);
+    showDetails(reference, 'Approved');
+  } else if (rawStatus === 'REJECTED' || rawStatus === 'FAILED') {
+    setUI('rejected','Payment failed','Your payment was declined by Atlantic Bank. Please try again or contact your bank.', backBtn + retryBtn);
+    showDetails(reference, 'Rejected');
+  } else if (rawStatus === 'PENDING') {
+    setUI('pending','Payment pending','Your payment is being processed. Atlantic Bank will confirm shortly.', backBtn);
+    showDetails(reference, 'Pending');
+  } else if (requestId) {
+    fetch('/api/check-session/' + requestId, { method:'POST', headers:{'Content-Type':'application/json'} })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var s = data.status || 'pending';
+      if (s === 'paid') {
+        setUI('approved','Payment approved ✓','Your payment was successfully processed by Atlantic Bank.', backBtn);
+        showDetails(reference,'Approved');
+      } else if (s === 'rejected') {
+        setUI('rejected','Payment failed','Your payment was declined. Please try again or contact your bank.', backBtn + retryBtn);
+        showDetails(reference,'Rejected');
+      } else {
+        setUI('pending','Payment pending','Your payment is still being processed. Atlantic Bank will confirm shortly.', backBtn);
+        showDetails(reference,'Pending');
+      }
+    })
+    .catch(function(){
+      setUI('pending','Status unknown','We could not confirm your payment right now. Please contact support with your reference number.', backBtn);
+      showDetails(reference,'Unknown');
+    });
+  } else {
+    setUI('pending','Payment processing','Your payment is being processed. Please keep your reference number for follow-up.', backBtn);
+  }
+</script>
+</body>
+</html>
