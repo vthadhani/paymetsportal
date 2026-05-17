@@ -339,7 +339,17 @@
                 </div>
               </div>
               <div id="gw-note-stripe" class="info-box blue"><i class="ti ti-info-circle"></i><span>Stripe processes credit cards in USD and international currencies. Local Belize debit cards are not supported — use Atlantic Bank for those customers.</span></div>
-              <div id="gw-note-ptp" class="info-box green" style="display:none"><i class="ti ti-info-circle"></i><span>Atlantic Bank (PlaceToPay) accepts local Belize debit cards and processes in BZD. Requires your PlaceToPay merchant credentials configured in Settings.</span></div>
+              <div id="gw-note-ptp" class="info-box green" style="display:none"><i class="ti ti-info-circle"></i><span>Atlantic Bank (PlaceToPay) accepts local Belize debit cards via <strong>abgateway.atlabank.com</strong>. Paste the <strong>processUrl</strong> from your WooCommerce order or backend below.</span></div>
+            </div>
+
+            <!-- Atlantic Bank processUrl paste field -->
+            <div class="card" id="ptp-url-card" style="display:none">
+              <div class="card-header"><h3><i class="ti ti-link"></i> Atlantic Bank session URL</h3></div>
+              <div class="form-group">
+                <label>Paste your processUrl from Atlantic Bank *</label>
+                <input type="url" id="f-ptp-url" placeholder="https://abgateway.atlabank.com/spa/session/174018/9455cf...">
+              </div>
+              <div class="info-box amber" style="margin-top:.75rem"><i class="ti ti-alert-triangle"></i><span>Copy the processUrl from your WooCommerce PlaceToPay order or backend and paste it here — the portal will generate a scannable QR code and shareable link from it.</span></div>
             </div>
 
             <div class="card">
@@ -402,9 +412,9 @@
                 <div style="font-size:11px;color:var(--text-tertiary);margin-top:5px" id="gen-expiry-note"></div>
               </div>
               <div class="qr-wrap">
-                <div style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">QR code — scan to pay</div>
-                <canvas id="qrCanvas" width="200" height="200"></canvas>
-                <div style="display:flex;gap:8px;margin-top:6px">
+                <div style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">QR code — scan to pay</div>
+                <div id="qrcode" style="display:flex;justify-content:center;"></div>
+                <div style="display:flex;gap:8px;margin-top:10px">
                   <button class="btn-ghost" onclick="downloadQR()"><i class="ti ti-download"></i> Download QR</button>
                   <button class="btn-ghost" onclick="copyLink()"><i class="ti ti-copy"></i> Copy link</button>
                 </div>
@@ -555,7 +565,7 @@
           <div class="form-grid">
             <div class="form-group"><label>PlaceToPay login</label><input type="text" id="ptp-login" placeholder="merchant_login"></div>
             <div class="form-group"><label>PlaceToPay secret key</label><input type="password" id="ptp-secret" placeholder="secret_key"></div>
-            <div class="form-group full"><label>API endpoint URL (from Atlantic Bank)</label><input type="text" id="ptp-endpoint" placeholder="https://paymentez.placetopay.com/api/session"></div>
+            <div class="form-group full"><label>API endpoint URL (from Atlantic Bank)</label><input type="text" id="ptp-endpoint" placeholder="https://abgateway.atlabank.com/api/session"></div>
             <div class="form-group full"><label>Return URL after payment</label><input type="text" id="ptp-return" placeholder="https://yourdomain.com/payment/return"></div>
           </div>
           <div style="margin-top:1rem;display:flex;gap:10px">
@@ -579,6 +589,7 @@
 
 <div class="copy-toast" id="toast"><i class="ti ti-check"></i> <span id="toast-msg">Copied!</span></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 /* ── State ── */
@@ -616,6 +627,7 @@ function selectGW(gw) {
   document.getElementById('opt-ptp').className = 'gw-option' + (gw === 'ptp' ? ' sel-ptp' : '');
   document.getElementById('gw-note-stripe').style.display = gw === 'stripe' ? 'flex' : 'none';
   document.getElementById('gw-note-ptp').style.display = gw === 'ptp' ? 'flex' : 'none';
+  document.getElementById('ptp-url-card').style.display = gw === 'ptp' ? 'block' : 'none';
   var btn = document.getElementById('gen-btn');
   btn.className = 'btn-primary' + (gw === 'ptp' ? ' ptp' : '');
   if (gw === 'ptp') { document.getElementById('f-currency').value = 'BZD'; document.getElementById('curr-sym').textContent = 'BZ$'; }
@@ -648,9 +660,12 @@ function generateLink() {
     var prefix = (document.getElementById('link-prefix').value || 'https://buy.stripe.com/').replace(/\/$/, '');
     url = prefix + '/pay_' + id + '_' + Date.now().toString(36);
   } else {
-    // In production: call your backend which calls PlaceToPay and returns processUrl
-    // For now generates a demo PTP-style URL — replace with real processUrl from API
-    url = 'https://checkout.placetopay.com/session/' + id + '/' + Date.now().toString(36);
+    // Atlantic Bank: use the real processUrl pasted by the user
+    url = document.getElementById('f-ptp-url').value.trim();
+    if (!url || !url.startsWith('http')) {
+      showToast('Please paste your Atlantic Bank processUrl first.');
+      return;
+    }
   }
 
   var link = {
@@ -686,62 +701,37 @@ function generateLink() {
   document.getElementById('s-status').innerHTML = '<span class="status-pill ' + link.status + '">' + link.status + '</span>';
   var expMap = {never:'Link does not expire.','24h':'Expires in 24 hours.','7d':'Expires in 7 days.','30d':'Expires in 30 days.'};
   document.getElementById('gen-expiry-note').textContent = expMap[link.expiry] || '';
-  generateQR(url, isStripe ? '#185FA5' : '#1D9E75', isStripe ? 'PAY' : 'BZD');
+  generateQR(url);
   showToast((isStripe ? 'Stripe' : 'Atlantic Bank') + ' link created!');
 }
 
-/* ── QR Code generator ── */
-function generateQR(text, color, label) {
-  var canvas = document.getElementById('qrCanvas');
-  var ctx = canvas.getContext('2d');
-  var size = 200;
-  canvas.width = size; canvas.height = size;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, size, size);
-
-  var hash = 0;
-  for (var i = 0; i < text.length; i++) hash = (Math.imul(31, hash) + text.charCodeAt(i)) | 0;
-  var rng = function(s) { s=(s^61)^(s>>>16);s+=(s<<3);s^=(s>>>4);s=Math.imul(s,0x27d4eb2d);s^=(s>>>15); return s; };
-
-  var modules = 29;
-  var cell = Math.floor((size - 20) / modules);
-  var offset = Math.floor((size - modules * cell) / 2);
-
-  ctx.fillStyle = '#111';
-  for (var r = 0; r < modules; r++) {
-    for (var c = 0; c < modules; c++) {
-      var inFinder = (r < 9 && c < 9) || (r < 9 && c >= modules - 8) || (r >= modules - 8 && c < 9);
-      var bit;
-      if (inFinder) {
-        var fr = r < modules - 8 ? r : r - (modules - 8);
-        var fc = c < modules - 8 ? c : c - (modules - 8);
-        if (fr >= 1 && fr <= 5 && fc >= 1 && fc <= 5) bit = (fr >= 2 && fr <= 4 && fc >= 2 && fc <= 4) ? 1 : 0;
-        else if (fr === 0 || fr === 6 || fc === 0 || fc === 6) bit = 1;
-        else bit = 0;
-      } else {
-        var sv = rng(hash ^ (r * 127 + c));
-        bit = (text.charCodeAt((r * modules + c) % text.length) + sv) & 1;
-      }
-      if (bit) ctx.fillRect(offset + c * cell, offset + r * cell, cell - 1, cell - 1);
-    }
-  }
-  /* center logo */
-  var ep = Math.floor(size * 0.33);
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(ep, ep, size - ep * 2, size - ep * 2);
-  ctx.fillStyle = color;
-  ctx.fillRect(ep + 4, ep + 4, size - (ep + 4) * 2, size - (ep + 4) * 2);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 12px sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('PAY', size / 2, size / 2 - 8);
-  ctx.fillText(label, size / 2, size / 2 + 8);
+/* ── QR Code generator (real, scannable — uses qrcode.js) ── */
+var qrInstance = null;
+function generateQR(text) {
+  var container = document.getElementById('qrcode');
+  container.innerHTML = '';
+  qrInstance = new QRCode(container, {
+    text: text,
+    width: 200,
+    height: 200,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  });
 }
 
 function downloadQR() {
-  var canvas = document.getElementById('qrCanvas');
+  var container = document.getElementById('qrcode');
+  var img = container.querySelector('img');
+  var canvas = container.querySelector('canvas');
   var a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png');
+  if (canvas) {
+    a.href = canvas.toDataURL('image/png');
+  } else if (img) {
+    a.href = img.src;
+  } else {
+    showToast('QR not ready yet.'); return;
+  }
   a.download = 'payment-qr-' + Date.now() + '.png';
   a.click();
 }
@@ -753,8 +743,8 @@ function copyLink() {
 }
 
 function clearForm() {
-  ['f-name','f-phone','f-company','f-email','f-address','f-amount','f-desc'].forEach(function(id) {
-    document.getElementById(id).value = '';
+  ['f-name','f-phone','f-company','f-email','f-address','f-amount','f-desc','f-ptp-url'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('result-card').style.display = 'none';
   document.getElementById('placeholder-card').style.display = 'block';
