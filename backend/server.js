@@ -155,7 +155,7 @@ app.post('/api/check-session/:requestId', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = 3000; // hardcoded — do not use process.env.PORT (Coolify sets that to the public port)
 app.listen(PORT, '0.0.0.0', () => {
   console.log('===========================================');
   console.log('PayPortal backend running on port', PORT);
