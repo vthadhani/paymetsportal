@@ -18,30 +18,36 @@ app.use(function(req, res, next) {
 });
 
 /* ─────────────────────────────────────────────────────────
-   PlaceToPay auth
-   tranKey = Base64( SHA-256( nonce + seed + secretKey ) )
+   PlaceToPay auth — matches exactly what WooCommerce sends
+   The WooCommerce plugin uses:
+     nonce    = base64( random_bytes )
+     tranKey  = base64( sha256( base64_decoded_nonce + seed + secret ) )
 ───────────────────────────────────────────────────────── */
 function ptpAuth() {
-  const rawNonce = crypto.randomBytes(16).toString('hex');
-  const seed     = new Date().toISOString();
-  const tranKey  = crypto
+  const login     = process.env.PTP_LOGIN   || '';
+  const secretKey = process.env.PTP_SECRET  || '';
+
+  // Generate nonce as raw bytes then base64 encode — same as WooCommerce PHP:
+  // $nonce = base64_encode(Str::random(16));
+  const rawBytes  = crypto.randomBytes(16);
+  const nonce     = rawBytes.toString('base64');
+  const seed      = new Date().toISOString();
+
+  // WooCommerce tranKey: base64(sha256(base64_decode(nonce) . seed . secret))
+  // base64_decode(nonce) gives back the raw bytes
+  const tranKey = crypto
     .createHash('sha256')
-    .update(rawNonce + seed + (process.env.PTP_SECRET || ''))
+    .update(Buffer.concat([rawBytes, Buffer.from(seed), Buffer.from(secretKey)]))
     .digest('base64');
-  return {
-    login:    process.env.PTP_LOGIN || '',
-    tranKey,
-    nonce:    Buffer.from(rawNonce).toString('base64'),
-    seed,
-  };
+
+  return { login, tranKey, nonce, seed };
 }
 
-/* ── Simple HTTPS POST, no external deps ── */
 function postJSON(urlStr, body) {
   return new Promise((resolve, reject) => {
     let parsed;
     try { parsed = new URL(urlStr); }
-    catch(e) { return reject(new Error('Invalid PTP_ENDPOINT URL: "' + urlStr + '" — check your Coolify environment variables.')); }
+    catch(e) { return reject(new Error('Invalid URL: "' + urlStr + '"')); }
 
     const lib  = parsed.protocol === 'https:' ? https : http;
     const data = Buffer.from(JSON.stringify(body));
@@ -61,7 +67,7 @@ function postJSON(urlStr, body) {
       res.on('data', c => raw += c);
       res.on('end', () => {
         try { resolve({ status: res.statusCode, body: JSON.parse(raw) }); }
-        catch(e) { reject(new Error('Non-JSON response from Atlantic Bank: ' + raw.slice(0, 300))); }
+        catch(e) { reject(new Error('Non-JSON from bank: ' + raw.slice(0, 500))); }
       });
     });
 
@@ -71,13 +77,9 @@ function postJSON(urlStr, body) {
   });
 }
 
-/* ── Derive our own return URL ── */
 function getReturnUrl(req) {
-  // Use explicit env var if set, otherwise build from request host
-  if (process.env.PTP_RETURN_URL && process.env.PTP_RETURN_URL && !process.env.PTP_RETURN_URL.includes('yourdomain.com')) {
-    return process.env.PTP_RETURN_URL;
-  }
-  // Auto-detect: same host as the request, /payment/return path
+  const env = process.env.PTP_RETURN_URL || '';
+  if (env && !env.includes('yourdomain.com')) return env;
   const proto = req.headers['x-forwarded-proto'] || 'http';
   const host  = req.headers['x-forwarded-host']  || req.headers['host'] || 'localhost:6680';
   return proto + '://' + host + '/payment/return.html';
@@ -90,11 +92,23 @@ app.get('/api/health', (_req, res) => {
     ptpLogin:    !!process.env.PTP_LOGIN,
     ptpSecret:   !!process.env.PTP_SECRET,
     ptpEndpoint: process.env.PTP_ENDPOINT || '(not set)',
-    returnUrl:   process.env.PTP_RETURN_URL || '(auto-detect from request)',
+    returnUrl:   process.env.PTP_RETURN_URL || '(auto)',
   });
 });
 
-/* ── Create PlaceToPay session ── */
+/* ── Debug: test auth only ── */
+app.get('/api/debug-auth', (_req, res) => {
+  const auth = ptpAuth();
+  res.json({
+    login:    auth.login    ? auth.login.slice(0,8) + '...' : 'NOT SET',
+    tranKey:  auth.tranKey  ? auth.tranKey.slice(0,8) + '...' : 'empty',
+    nonce:    auth.nonce    ? auth.nonce.slice(0,8) + '...' : 'empty',
+    seed:     auth.seed,
+    endpoint: process.env.PTP_ENDPOINT || 'NOT SET',
+  });
+});
+
+/* ── Create session ── */
 app.post('/api/create-session', async (req, res) => {
   const {
     reference, description, amount, currency,
@@ -102,30 +116,27 @@ app.post('/api/create-session', async (req, res) => {
     expiryHours,
   } = req.body;
 
-  /* Validate inputs */
-  if (!reference || !description || !amount || !currency) {
-    return res.status(400).json({ success: false, error: 'reference, description, amount and currency are required.' });
-  }
-
-  /* Validate env vars */
   const login    = process.env.PTP_LOGIN;
   const secret   = process.env.PTP_SECRET;
   const endpoint = (process.env.PTP_ENDPOINT || '').trim();
 
-  if (!login)    return res.status(500).json({ success: false, error: 'PTP_LOGIN is not set in Coolify environment variables.' });
-  if (!secret)   return res.status(500).json({ success: false, error: 'PTP_SECRET is not set in Coolify environment variables.' });
-  if (!endpoint) return res.status(500).json({ success: false, error: 'PTP_ENDPOINT is not set in Coolify environment variables.' });
+  if (!login)    return res.status(500).json({ success: false, error: 'PTP_LOGIN is not set.' });
+  if (!secret)   return res.status(500).json({ success: false, error: 'PTP_SECRET is not set.' });
+  if (!endpoint) return res.status(500).json({ success: false, error: 'PTP_ENDPOINT is not set.' });
+  if (!reference || !amount || !currency) {
+    return res.status(400).json({ success: false, error: 'reference, amount and currency are required.' });
+  }
 
   const returnUrl  = getReturnUrl(req);
   const hours      = parseInt(expiryHours, 10) || 24;
   const expiration = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+  const auth       = ptpAuth();
 
-  /* Build payload — mirrors exactly what WooCommerce PlaceToPay plugin sends */
   const payload = {
-    auth: ptpAuth(),
+    auth,
     payment: {
       reference:   String(reference),
-      description: String(description),
+      description: String(description || 'Payment'),
       amount: {
         currency: String(currency).toUpperCase(),
         total:    parseFloat(amount),
@@ -146,26 +157,33 @@ app.post('/api/create-session', async (req, res) => {
     if (customerAddress) payload.buyer.address = { street: customerAddress };
   }
 
-  console.log('[PTP] POST', endpoint);
-  console.log('[PTP] payload', JSON.stringify({ ...payload, auth: { ...payload.auth, tranKey: '***' } }));
+  // Log everything (mask secret)
+  console.log('[PTP] ── create-session ──────────────────');
+  console.log('[PTP] endpoint  :', endpoint);
+  console.log('[PTP] login     :', login);
+  console.log('[PTP] returnUrl :', returnUrl);
+  console.log('[PTP] payload   :', JSON.stringify({
+    ...payload,
+    auth: { ...auth, tranKey: auth.tranKey.slice(0,8) + '...', nonce: auth.nonce.slice(0,8) + '...' }
+  }, null, 2));
 
   try {
     const { status: httpStatus, body: data } = await postJSON(endpoint, payload);
-    console.log('[PTP] response', httpStatus, JSON.stringify(data));
 
-    /* Atlantic Bank returns status.status === 'OK' and a processUrl on success */
+    console.log('[PTP] ── response ───────────────────────');
+    console.log('[PTP] HTTP status:', httpStatus);
+    console.log('[PTP] body       :', JSON.stringify(data, null, 2));
+
     if (data.status && data.status.status === 'OK') {
-      return res.json({
-        success:    true,
-        processUrl: data.processUrl,   // e.g. https://abgateway.atlabank.com/spa/session/174018/9455cf...
-        requestId:  data.requestId,
-      });
+      return res.json({ success: true, processUrl: data.processUrl, requestId: data.requestId });
     }
 
+    // Return full bank response so we can see exactly what they say
     return res.status(400).json({
-      success: false,
-      error:   (data.status && data.status.message) || 'Atlantic Bank rejected the session request.',
-      raw:     data,
+      success:  false,
+      error:    (data.status && data.status.message) || 'Atlantic Bank rejected the request.',
+      bankCode: (data.status && data.status.reason)  || null,
+      raw:      data,
     });
 
   } catch (err) {
@@ -174,7 +192,7 @@ app.post('/api/create-session', async (req, res) => {
   }
 });
 
-/* ── Check session status ── */
+/* ── Check session ── */
 app.post('/api/check-session/:requestId', async (req, res) => {
   const endpoint = (process.env.PTP_ENDPOINT || '').trim();
   if (!endpoint) return res.status(500).json({ success: false, error: 'PTP_ENDPOINT not set.' });
@@ -182,7 +200,7 @@ app.post('/api/check-session/:requestId', async (req, res) => {
   const url = endpoint.replace(/\/$/, '') + '/' + req.params.requestId;
   try {
     const { body: data } = await postJSON(url, { auth: ptpAuth() });
-    const raw       = (data.status && data.status.status) || 'PENDING';
+    const raw      = (data.status && data.status.status) || 'PENDING';
     const statusMap = { APPROVED: 'paid', PENDING: 'pending', REJECTED: 'rejected', FAILED: 'rejected' };
     return res.json({ success: true, status: statusMap[raw] || 'pending', raw: data });
   } catch (err) {
@@ -190,7 +208,7 @@ app.post('/api/check-session/:requestId', async (req, res) => {
   }
 });
 
-const PORT = 3000; // hardcoded — Coolify sets PORT=6680 which conflicts with nginx
+const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('===========================================');
   console.log(' PayPortal backend on port', PORT);
