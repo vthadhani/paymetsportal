@@ -156,14 +156,15 @@ app.post('/api/create-session', async (req, res) => {
     console.log('[PTP] HTTP status:', httpStatus);
     console.log('[PTP] body       :', JSON.stringify(data, null, 2));
 
-    if (data.status && data.status.status === 'OK') {
+    // Handle both direct PlaceToPay response AND WordPress proxy response
+    if ((data.status && data.status.status === 'OK') || (data.success === true && data.processUrl)) {
       return res.json({ success: true, processUrl: data.processUrl, requestId: data.requestId });
     }
 
-    // Return full bank response so we can see exactly what they say
+    // Neither format matched — return full response for debugging
     return res.status(400).json({
       success:  false,
-      error:    (data.status && data.status.message) || 'Atlantic Bank rejected the request.',
+      error:    (data.status && data.status.message) || (data.error) || 'Atlantic Bank rejected the request.',
       bankCode: (data.status && data.status.reason)  || null,
       raw:      data,
     });
