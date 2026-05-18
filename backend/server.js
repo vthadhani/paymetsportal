@@ -127,45 +127,27 @@ app.post('/api/create-session', async (req, res) => {
     return res.status(400).json({ success: false, error: 'reference, amount and currency are required.' });
   }
 
-  const returnUrl  = getReturnUrl(req);
-  const hours      = parseInt(expiryHours, 10) || 24;
-  const expiration = new Date(Date.now() + hours * 3600 * 1000).toISOString();
-  const auth       = ptpAuth();
+  const returnUrl = getReturnUrl(req);
 
+  // Send flat format to WordPress — WordPress builds the PlaceToPay payload.
+  // Do NOT pre-build the PlaceToPay structure here.
   const payload = {
-    auth,
-    payment: {
-      reference:   String(reference),
-      description: String(description || 'Payment'),
-      amount: {
-        currency: String(currency).toUpperCase(),
-        total:    parseFloat(amount),
-      },
-    },
-    expiration,
+    reference:       String(reference),
+    description:     String(description || 'Payment'),
+    amount:          parseFloat(amount),
+    currency:        String(currency).toUpperCase(),
+    customerName:    customerName    || '',
+    customerEmail:   customerEmail   || '',
+    customerPhone:   customerPhone   || '',
+    customerAddress: customerAddress || '',
+    expiryHours:     parseInt(expiryHours, 10) || 24,
     returnUrl,
-    ipAddress: (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1')
-                 .split(',')[0].trim(),
-    userAgent: req.headers['user-agent'] || 'PayPortalBZ/1.0',
   };
 
-  if (customerName || customerEmail || customerPhone) {
-    payload.buyer = {};
-    if (customerName)    payload.buyer.name   = customerName;
-    if (customerEmail)   payload.buyer.email  = customerEmail;
-    if (customerPhone)   payload.buyer.mobile = customerPhone;
-    if (customerAddress) payload.buyer.address = { street: customerAddress };
-  }
-
-  // Log everything (mask secret)
-  console.log('[PTP] ── create-session ──────────────────');
   console.log('[PTP] endpoint  :', endpoint);
-  console.log('[PTP] login     :', login);
-  console.log('[PTP] returnUrl :', returnUrl);
-  console.log('[PTP] payload   :', JSON.stringify({
-    ...payload,
-    auth: { ...auth, tranKey: auth.tranKey.slice(0,8) + '...', nonce: auth.nonce.slice(0,8) + '...' }
-  }, null, 2));
+  console.log('[PTP] amount    :', payload.amount, typeof payload.amount);
+  console.log('[PTP] currency  :', payload.currency);
+  console.log('[PTP] reference :', payload.reference);
 
   try {
     const { status: httpStatus, body: data } = await postJSON(endpoint, payload);
