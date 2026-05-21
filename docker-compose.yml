@@ -19,9 +19,15 @@ services:
       - PTP_RETURN_URL=${PTP_RETURN_URL}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:6680/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
+
+# Add to your environment section:
+# - ADMIN_USERNAME=admin
+# - ADMIN_PASSWORD=your_secure_password_here

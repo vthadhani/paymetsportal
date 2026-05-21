@@ -17,6 +17,71 @@ app.use(function(req, res, next) {
   next();
 });
 
+/* ── In-memory session store ── */
+var sessions = {};
+
+function generateToken() {
+  return require('crypto').randomBytes(32).toString('hex');
+}
+
+function requireAuth(req, res, next) {
+  var token = req.headers['x-auth-token'] || '';
+  if (!token || !sessions[token]) {
+    return res.status(401).json({ success: false, error: 'Unauthorized. Please log in.' });
+  }
+  sessions[token].lastSeen = Date.now();
+  next();
+}
+
+/* ── Auth endpoints ── */
+app.post('/api/auth/login', function(req, res) {
+  var username = (req.body.username || '').trim();
+  var password = (req.body.password || '').trim();
+
+  var adminUser = process.env.ADMIN_USERNAME || 'admin';
+  var adminPass = process.env.ADMIN_PASSWORD || '';
+
+  if (!adminPass) {
+    return res.status(500).json({ success: false, error: 'ADMIN_PASSWORD environment variable is not set in Coolify.' });
+  }
+
+  if (username === adminUser && password === adminPass) {
+    var token = generateToken();
+    sessions[token] = { username: username, createdAt: Date.now(), lastSeen: Date.now() };
+    console.log('[AUTH] Login successful for:', username);
+    return res.json({ success: true, token: token, username: username });
+  }
+
+  console.log('[AUTH] Failed login attempt for:', username);
+  return res.status(401).json({ success: false, error: 'Invalid username or password.' });
+});
+
+app.post('/api/auth/logout', function(req, res) {
+  var token = req.headers['x-auth-token'] || '';
+  if (token && sessions[token]) {
+    delete sessions[token];
+    console.log('[AUTH] Logged out token:', token.slice(0, 8) + '...');
+  }
+  return res.json({ success: true });
+});
+
+app.get('/api/auth/verify', function(req, res) {
+  var token = req.headers['x-auth-token'] || '';
+  if (token && sessions[token]) {
+    sessions[token].lastSeen = Date.now();
+    return res.json({ success: true, username: sessions[token].username });
+  }
+  return res.status(401).json({ success: false, error: 'Session expired.' });
+});
+
+/* Clean up sessions older than 8 hours */
+setInterval(function() {
+  var cutoff = Date.now() - (8 * 60 * 60 * 1000);
+  Object.keys(sessions).forEach(function(t) {
+    if (sessions[t].lastSeen < cutoff) delete sessions[t];
+  });
+}, 30 * 60 * 1000);
+
 /* ─────────────────────────────────────────────────────────
    PlaceToPay auth — matches exactly what WooCommerce sends
    The WooCommerce plugin uses:
@@ -109,7 +174,7 @@ app.get('/api/debug-auth', (_req, res) => {
 });
 
 /* ── Create session ── */
-app.post('/api/create-session', async (req, res) => {
+app.post('/api/create-session', requireAuth, async (req, res) => {
   const {
     reference, description, amount, currency,
     customerName, customerEmail, customerPhone, customerAddress,
@@ -176,7 +241,7 @@ app.post('/api/create-session', async (req, res) => {
 });
 
 /* ── Check session ── */
-app.post('/api/check-session/:requestId', async (req, res) => {
+app.post('/api/check-session/:requestId', async (req, res) => {  // public — customer return page needs this
   const endpoint = (process.env.PTP_ENDPOINT || '').trim();
   if (!endpoint) return res.status(500).json({ success: false, error: 'PTP_ENDPOINT not set.' });
 
