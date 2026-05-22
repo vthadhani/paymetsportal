@@ -256,6 +256,91 @@ app.post('/api/check-session/:requestId', async (req, res) => {  // public — c
   }
 });
 
+/* ── Send WhatsApp message via WaSenderAPI ── */
+app.post('/api/send-whatsapp', requireAuth, async (req, res) => {
+  const { phone, customerName, amount, currency, paymentUrl, description } = req.body;
+
+  const apiKey = process.env.WASENDER_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ success: false, error: 'WASENDER_API_KEY is not set in Coolify environment variables.' });
+  }
+  if (!phone || !paymentUrl) {
+    return res.status(400).json({ success: false, error: 'phone and paymentUrl are required.' });
+  }
+
+  // Normalise phone: ensure it starts with +
+  var to = phone.trim().replace(/\s+/g, '');
+  if (!to.startsWith('+')) to = '+' + to;
+
+  // Format currency symbol
+  var sym = { USD:'$', BZD:'BZ$', EUR:'€', GBP:'£', CAD:'CA$' };
+  var amtStr = (sym[currency] || '$') + parseFloat(amount).toFixed(2) + ' ' + (currency || '');
+
+  // Build WhatsApp message
+  var message = [
+    '💳 *Payment Request — PayPortal BZ*',
+    '',
+    'Hello ' + (customerName || 'there') + ',',
+    '',
+    'You have a payment request waiting for you.',
+    '',
+    '📋 *Details*',
+    '• Description: ' + (description || 'Payment'),
+    '• Amount: *' + amtStr + '*',
+    '',
+    '🔗 *Pay securely here:*',
+    paymentUrl,
+    '',
+    '_This link was sent via PayPortal BZ. Please pay at your earliest convenience._',
+  ].join('\n');
+
+  console.log('[WA] Sending to:', to);
+
+  try {
+    const data = Buffer.from(JSON.stringify({ to: to, text: message }));
+    const result = await new Promise((resolve, reject) => {
+      const req2 = require('https').request({
+        hostname: 'www.wasenderapi.com',
+        port: 443,
+        path: '/api/send-message',
+        method: 'POST',
+        headers: {
+          'Authorization':  'Bearer ' + apiKey,
+          'Content-Type':   'application/json',
+          'Accept':         'application/json',
+          'Content-Length': data.length,
+        },
+      }, (r) => {
+        let raw = '';
+        r.on('data', c => raw += c);
+        r.on('end', () => {
+          try { resolve({ status: r.statusCode, body: JSON.parse(raw) }); }
+          catch(e) { reject(new Error('Bad JSON from WaSender: ' + raw.slice(0, 200))); }
+        });
+      });
+      req2.on('error', reject);
+      req2.write(data);
+      req2.end();
+    });
+
+    console.log('[WA] Response', result.status, JSON.stringify(result.body));
+
+    if (result.body && result.body.success) {
+      return res.json({ success: true, msgId: result.body.data && result.body.data.msgId });
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: (result.body && result.body.message) || 'WaSenderAPI rejected the request.',
+      raw: result.body,
+    });
+
+  } catch (err) {
+    console.error('[WA] Error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('===========================================');

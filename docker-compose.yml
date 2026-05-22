@@ -21,6 +21,7 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - WASENDER_API_KEY=${WASENDER_API_KEY}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:6680/health"]
       interval: 30s

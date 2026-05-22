@@ -217,6 +217,24 @@
   .copy-toast.show { display: flex; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── WhatsApp send ── */
+  .wa-section { border-top: 0.5px solid var(--border-light); padding-top: 1rem; margin-top: 0.5rem; }
+  .wa-row { display: flex; gap: 8px; align-items: flex-end; }
+  .wa-row .form-group { flex: 1; margin: 0; }
+  .btn-wa {
+    background: #25D366; color: #fff; border: none;
+    border-radius: var(--radius-md); padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+    white-space: nowrap; font-family: inherit; transition: opacity .15s;
+    flex-shrink: 0;
+  }
+  .btn-wa:hover { opacity: .88; }
+  .btn-wa:disabled { opacity: .55; cursor: not-allowed; }
+  .wa-status { font-size: 12px; margin-top: 6px; min-height: 18px; }
+  .wa-status.ok  { color: var(--success-text); }
+  .wa-status.err { color: var(--danger-text); }
+
   /* ── Login screen ── */
   .login-overlay {
     position: fixed; inset: 0; background: var(--bg-tertiary);
@@ -513,6 +531,25 @@
                 <tr><td style="color:var(--text-secondary);padding:3px 0">Gateway</td><td style="text-align:right" id="s-gateway">—</td></tr>
                 <tr><td style="color:var(--text-secondary);padding:3px 0">Status</td><td style="text-align:right" id="s-status">—</td></tr>
               </table>
+
+              <!-- WhatsApp send -->
+              <div class="wa-section">
+                <div style="font-size:12px;color:var(--text-secondary);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.118 1.528 5.856L.057 23.882l6.174-1.616A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.981 1-3.635-.235-.374A9.862 9.862 0 012.106 12C2.106 6.58 6.58 2.106 12 2.106S21.894 6.58 21.894 12 17.42 21.894 12 21.894z"/></svg>
+                  Send via WhatsApp
+                </div>
+                <div class="wa-row">
+                  <div class="form-group">
+                    <label>WhatsApp number (with country code)</label>
+                    <input type="tel" id="wa-phone" placeholder="+501 600 0000">
+                  </div>
+                  <button class="btn-wa" id="wa-btn" onclick="sendWhatsApp()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.118 1.528 5.856L.057 23.882l6.174-1.616A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.981 1-3.635-.235-.374A9.862 9.862 0 012.106 12C2.106 6.58 6.58 2.106 12 2.106S21.894 6.58 21.894 12 17.42 21.894 12 21.894z"/></svg>
+                    Send
+                  </button>
+                </div>
+                <div class="wa-status" id="wa-status"></div>
+              </div>
             </div>
 
             <div class="card" id="placeholder-card">
@@ -814,6 +851,13 @@ function finishLink(id, url, name, amount, currency) {
   };
   links.unshift(link);
   saveLinks();
+  currentLink = link;
+
+  // Pre-fill WhatsApp number from customer phone
+  var waPhone = document.getElementById('wa-phone');
+  if (waPhone && link.phone) waPhone.value = link.phone;
+  // Reset WA status
+  setWaStatus('', '');
 
   document.getElementById('gen-link-text').textContent = url;
   document.getElementById('gen-link-row').className = 'link-row' + (isStripe ? '' : ' ptp');
@@ -1058,6 +1102,65 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+/* ── WhatsApp ── */
+var currentLink = null; // holds the last generated link object
+
+function sendWhatsApp() {
+  if (!currentLink) { showToast('Generate a link first.'); return; }
+
+  var phone = document.getElementById('wa-phone').value.trim();
+  if (!phone) {
+    setWaStatus('err', 'Please enter a WhatsApp number.');
+    return;
+  }
+
+  var btn = document.getElementById('wa-btn');
+  var statusEl = document.getElementById('wa-status');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" style="animation:spin .8s linear infinite"><path d="M12 2a10 10 0 1 0 10 10"/></svg> Sending...';
+  setWaStatus('', '');
+
+  fetch('/api/send-whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone:       phone,
+      customerName: currentLink.name,
+      amount:      currentLink.amount,
+      currency:    currentLink.currency,
+      paymentUrl:  currentLink.url,
+      description: currentLink.desc || 'Payment',
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.118 1.528 5.856L.057 23.882l6.174-1.616A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.981 1-3.635-.235-.374A9.862 9.862 0 012.106 12C2.106 6.58 6.58 2.106 12 2.106S21.894 6.58 21.894 12 17.42 21.894 12 21.894z"/></svg> Send';
+    if (data.success) {
+      setWaStatus('ok', '✓ Message sent to ' + phone);
+      // Also update the link status to "sent"
+      if (currentLink) {
+        var l = links.find(function(x) { return x.id === currentLink.id; });
+        if (l && l.status === 'pending') { l.status = 'sent'; saveLinks(); }
+      }
+    } else {
+      setWaStatus('err', '✗ ' + (data.error || 'Failed to send.'));
+    }
+  })
+  .catch(function(err) {
+    btn.disabled = false;
+    btn.innerHTML = 'Send';
+    setWaStatus('err', '✗ Could not reach server.');
+  });
+}
+
+function setWaStatus(type, msg) {
+  var el = document.getElementById('wa-status');
+  if (!el) return;
+  el.className = 'wa-status' + (type ? ' ' + type : '');
+  el.textContent = msg;
 }
 
 /* ── Auth ── */
